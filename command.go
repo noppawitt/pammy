@@ -475,9 +475,9 @@ func (c *AutoPlayCommand) Handle(s *discordgo.Session, i *discordgo.InteractionC
 
 	msg := "Autoplay is "
 	if enabled {
-		msg = "enabled"
+		msg += "enabled"
 	} else {
-		msg = "disabled"
+		msg += "disabled"
 	}
 
 	respondText(s, i.Interaction, msg)

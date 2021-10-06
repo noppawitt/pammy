@@ -372,7 +372,7 @@ func (tp TrackPage) DisplayText() string {
 		return "No tracks"
 	}
 
-	s := fmt.Sprintf("Total %d tracks (%d queued)\n```", tp.TotalTracks, tp.TotalQueued)
+	s := fmt.Sprintf("Total tracks: %d (%d queued)\n```", tp.TotalTracks, tp.TotalQueued)
 
 	for _, info := range tp.TrackInfos {
 		s += info + "\n"
