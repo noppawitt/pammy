@@ -45,8 +45,8 @@ type Bot struct {
 	currentTrackIdx int
 	state           BotState
 	errCh           chan error
-	skip            chan struct{}
-	stop            chan struct{}
+	skipCh          chan struct{}
+	stopCh          chan struct{}
 
 	youtubeClient *youtube.Client
 	dg            *discordgo.Session
@@ -62,8 +62,8 @@ func NewBot(guidID string, dg *discordgo.Session, youtubeClient *youtube.Client,
 		currentTrackIdx: 0,
 		state:           BotStateWaitForTrack,
 		errCh:           errCh,
-		skip:            make(chan struct{}),
-		stop:            make(chan struct{}),
+		skipCh:          make(chan struct{}),
+		stopCh:          make(chan struct{}),
 		youtubeClient:   youtubeClient,
 		dg:              dg,
 	}
@@ -89,11 +89,11 @@ func (b *Bot) Close() {
 	defer b.mu.Unlock()
 
 	if b.state != BotStateWaitForTrack {
-		b.stop <- struct{}{}
+		b.stopCh <- struct{}{}
 	}
 
-	close(b.skip)
-	close(b.stop)
+	close(b.skipCh)
+	close(b.stopCh)
 
 	if b.vc != nil {
 		b.vc.Disconnect()
@@ -146,21 +146,29 @@ func (b *Bot) play() {
 
 		select {
 		case err = <-done:
+			b.stop()
 			b.mu.Lock()
-			b.encodeSess.Cleanup()
 			if err != nil && err != io.EOF {
 				b.sendError(err)
 				return
 			}
 			b.currentTrackIdx++
 			b.mu.Unlock()
-		case <-b.skip:
-			b.encodeSess.Cleanup()
-		case <-b.stop:
-			b.encodeSess.Cleanup()
+		case <-b.skipCh:
+			b.stop()
+		case <-b.stopCh:
+			b.stop()
 			return
 		}
 	}
+}
+
+func (b *Bot) stop() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.streamSess.SetPaused(true)
+	b.encodeSess.Cleanup()
 }
 
 func (b *Bot) Pause() error {
@@ -232,7 +240,7 @@ func (b *Bot) GoTo(idx int) error {
 	}
 
 	b.currentTrackIdx = idx
-	b.skip <- struct{}{}
+	b.skipCh <- struct{}{}
 
 	return nil
 }
@@ -252,7 +260,7 @@ func (b *Bot) Reset() {
 	defer b.mu.Unlock()
 
 	if b.state != BotStateWaitForTrack {
-		b.stop <- struct{}{}
+		b.stopCh <- struct{}{}
 	}
 
 	b.currentTrackIdx = 0
