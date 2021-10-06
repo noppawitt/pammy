@@ -6,7 +6,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kkdai/youtube/v2"
 	"github.com/tidwall/gjson"
@@ -21,9 +23,9 @@ type Client struct {
 }
 
 type VideoInfo struct {
-	ID         string
-	Title      string
-	LengthText string
+	ID       string
+	Title    string
+	Duration time.Duration
 }
 
 func NewClient() *Client {
@@ -65,7 +67,22 @@ func (c *Client) Search(query string) ([]VideoInfo, error) {
 	return infos, nil
 }
 
-func ExtractSearchResult(r io.Reader) ([]VideoInfo, error) {
+func (c *Client) GetSuggestedVideos(id string) ([]VideoInfo, error) {
+	resp, err := c.httpClient.Get("https://www.youtube.com/watch?v=" + id)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	infos, err := ExtractSuggestedVideos(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return infos, nil
+}
+
+func extractJSONData(r io.Reader) ([]byte, error) {
 	data, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
@@ -86,14 +103,23 @@ func ExtractSearchResult(r io.Reader) ([]VideoInfo, error) {
 	}
 	s = s[:endIdx]
 
+	return []byte(s), nil
+}
+
+func ExtractSearchResult(r io.Reader) ([]VideoInfo, error) {
+	data, err := extractJSONData(r)
+	if err != nil {
+		return nil, err
+	}
+
 	var infos []VideoInfo
 
-	results := gjson.Get(s, "contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.0.itemSectionRenderer.contents.#.videoRenderer")
+	results := gjson.GetBytes(data, "contents.twoColumnSearchResultsRenderer.primaryContents.sectionListRenderer.contents.0.itemSectionRenderer.contents.#.videoRenderer")
 	results.ForEach(func(key, value gjson.Result) bool {
 		info := VideoInfo{
-			ID:         value.Get("videoId").Str,
-			Title:      value.Get("title.runs.0.text").Str,
-			LengthText: value.Get("lengthText.simpleText").Str,
+			ID:       value.Get("videoId").Str,
+			Title:    value.Get("title.runs.0.text").Str,
+			Duration: durationFromLengthText(value.Get("lengthText.simpleText").Str),
 		}
 
 		infos = append(infos, info)
@@ -101,4 +127,48 @@ func ExtractSearchResult(r io.Reader) ([]VideoInfo, error) {
 	})
 
 	return infos, nil
+}
+
+func ExtractSuggestedVideos(r io.Reader) ([]VideoInfo, error) {
+	data, err := extractJSONData(r)
+	if err != nil {
+		return nil, err
+	}
+
+	var infos []VideoInfo
+
+	results := gjson.GetBytes(data, "contents.twoColumnWatchNextResults.secondaryResults.secondaryResults.results.#.compactVideoRenderer")
+	results.ForEach(func(key, value gjson.Result) bool {
+		info := VideoInfo{
+			ID:       value.Get("videoId").Str,
+			Title:    value.Get("title.simpleText").Str,
+			Duration: durationFromLengthText(value.Get("lengthText.simpleText").Str),
+		}
+
+		infos = append(infos, info)
+		return true
+	})
+
+	return infos, nil
+}
+
+func durationFromLengthText(text string) time.Duration {
+	parts := strings.Split(text, ":")
+
+	if len(parts) > 3 {
+		return 0
+	}
+
+	var d time.Duration
+	units := [3]time.Duration{time.Second, time.Minute, time.Hour}
+	for i := 0; i < len(parts); i++ {
+		n, err := strconv.Atoi(parts[len(parts)-1-i])
+		if err != nil {
+			return 0
+		}
+
+		d += time.Duration(n) * units[i]
+	}
+
+	return d
 }

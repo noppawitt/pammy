@@ -22,9 +22,9 @@ var (
 )
 
 type Track struct {
-	ID     string
-	Name   string
-	Length time.Duration
+	ID       string
+	Name     string
+	Duration time.Duration
 }
 
 type BotState uint
@@ -41,21 +41,23 @@ type Bot struct {
 	guidID    string
 	channelID string
 
-	tracks          []*Track
-	currentTrackIdx int
-	state           BotState
-	errCh           chan error
-	skipCh          chan struct{}
-	stopCh          chan struct{}
+	tracks                []*Track
+	currentTrackIdx       int
+	state                 BotState
+	autoDiscoverNextTrack bool
 
-	youtubeClient *youtube.Client
-	dg            *discordgo.Session
-	vc            *discordgo.VoiceConnection
-	streamSess    *dca.StreamingSession
-	encodeSess    *dca.EncodeSession
+	errCh  chan error
+	skipCh chan struct{}
+	stopCh chan struct{}
+
+	ytClient   *youtube.Client
+	dg         *discordgo.Session
+	vc         *discordgo.VoiceConnection
+	streamSess *dca.StreamingSession
+	encodeSess *dca.EncodeSession
 }
 
-func NewBot(guidID string, dg *discordgo.Session, youtubeClient *youtube.Client, errCh chan error) *Bot {
+func NewBot(guidID string, dg *discordgo.Session, ytClient *youtube.Client, errCh chan error) *Bot {
 	return &Bot{
 		guidID:          guidID,
 		tracks:          nil,
@@ -64,7 +66,7 @@ func NewBot(guidID string, dg *discordgo.Session, youtubeClient *youtube.Client,
 		errCh:           errCh,
 		skipCh:          make(chan struct{}),
 		stopCh:          make(chan struct{}),
-		youtubeClient:   youtubeClient,
+		ytClient:        ytClient,
 		dg:              dg,
 	}
 }
@@ -120,13 +122,13 @@ func (b *Bot) play() {
 	for b.currentTrackIdx < len(b.tracks) {
 		b.mu.Lock()
 
-		video, err := b.youtubeClient.GetVideo(b.tracks[b.currentTrackIdx].ID)
+		video, err := b.ytClient.GetVideo(b.tracks[b.currentTrackIdx].ID)
 		if err != nil {
 			b.sendError(err)
 			return
 		}
 
-		streamURL, err := b.youtubeClient.GetStreamURL(video, video.Formats.FindByItag(249))
+		streamURL, err := b.ytClient.GetStreamURL(video, video.Formats.FindByItag(249))
 		if err != nil {
 			b.sendError(err)
 			return
@@ -159,6 +161,13 @@ func (b *Bot) play() {
 		case <-b.stopCh:
 			b.stop()
 			return
+		}
+
+		if b.currentTrackIdx == len(b.tracks) && b.autoDiscoverNextTrack {
+			err = b.discoverNextTrack()
+			if err != nil {
+				log.Println("cannot discover next track: ", err)
+			}
 		}
 	}
 }
@@ -332,7 +341,7 @@ func (b *Bot) List(page, pageSize int) TrackPage {
 
 	var infos []string
 	for i := start; i < end; i++ {
-		info := fmt.Sprintf("%d %s  %s", i+1, b.tracks[i].Name, b.tracks[i].Length)
+		info := fmt.Sprintf("%d %s  %s", i+1, b.tracks[i].Name, b.tracks[i].Duration)
 		if i == b.currentTrackIdx {
 			info += "  [Playing]"
 		}
@@ -348,4 +357,43 @@ func (b *Bot) List(page, pageSize int) TrackPage {
 	}
 
 	return trackPage
+}
+
+func (b *Bot) SetAutoDiscoverNextTrack(v bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.autoDiscoverNextTrack = v
+}
+
+func (b *Bot) discoverNextTrack() error {
+	b.mu.Lock()
+
+	lastTrackIdx := len(b.tracks) - 1
+	if lastTrackIdx < 0 {
+		return ErrEmptyTracks
+	}
+
+	videos, err := b.ytClient.GetSuggestedVideos(b.tracks[lastTrackIdx].ID)
+	if err != nil {
+		return err
+	}
+
+	if len(videos) == 0 {
+		return errors.New("no tracks discovered")
+	}
+
+	b.mu.Unlock()
+
+	video := videos[0]
+
+	track := &Track{
+		ID:       video.ID,
+		Name:     video.Title,
+		Duration: video.Duration,
+	}
+
+	b.Add(track)
+
+	return nil
 }

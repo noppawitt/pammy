@@ -57,29 +57,33 @@ func (c *AddCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate
 
 	query := i.ApplicationCommandData().Options[0].StringValue()
 
-	var videoURL = query
+	var track *Track
 
 	_, err := url.ParseRequestURI(query)
 	if err != nil {
-		result, err := c.ytClient.SearchOne(query)
+		video, err := c.ytClient.SearchOne(query)
 		if err != nil {
 			updateResponse(s, i.Interaction, "Cannot get result for: "+query)
 			return
 		}
 
-		videoURL = result.ID
-	}
+		track = &Track{
+			ID:       video.ID,
+			Name:     video.Title,
+			Duration: video.Duration,
+		}
+	} else {
+		video, err := c.ytClient.GetVideo(query)
+		if err != nil {
+			updateResponse(s, i.Interaction, "Cannot get video")
+			return
+		}
 
-	video, err := c.ytClient.GetVideo(videoURL)
-	if err != nil {
-		updateResponse(s, i.Interaction, "Cannot get video")
-		return
-	}
-
-	track := &Track{
-		ID:     video.ID,
-		Name:   video.Title,
-		Length: video.Duration,
+		track = &Track{
+			ID:       video.ID,
+			Name:     video.Title,
+			Duration: video.Duration,
+		}
 	}
 
 	if bot.ChannelID() == "" {
@@ -383,6 +387,52 @@ func (c *LeaveCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCrea
 	c.hub.RemoveBot(i.GuildID)
 
 	respondText(s, i.Interaction, "Seeya!")
+}
+
+type AutoPlayCommand struct {
+	hub *Hub
+}
+
+func NewAutoPlayCommand(hub *Hub) *AutoPlayCommand {
+	return &AutoPlayCommand{
+		hub: hub,
+	}
+}
+
+func (c *AutoPlayCommand) Command() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "autoplay",
+		Description: "Auto discover and play next music",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionBoolean,
+				Name:        "enabled",
+				Description: "Enable or disable autoplay",
+				Required:    true,
+			},
+		},
+	}
+}
+
+func (c *AutoPlayCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	bot, ok := c.hub.GetBot(i.GuildID)
+	if !ok {
+		respondTextPrivate(s, i.Interaction, "Pammy didn't join any channels")
+		return
+	}
+
+	enabled := i.ApplicationCommandData().Options[0].BoolValue()
+
+	bot.SetAutoDiscoverNextTrack(enabled)
+
+	msg := "Autoplay is "
+	if enabled {
+		msg = "enabled"
+	} else {
+		msg = "disabled"
+	}
+
+	respondText(s, i.Interaction, msg)
 }
 
 func respondAddMusicFirst(s *discordgo.Session, i *discordgo.Interaction) error {

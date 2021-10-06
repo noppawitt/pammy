@@ -55,6 +55,7 @@ func (c *Client) Start() error {
 	c.AddGlobalSlashCommand(NewRemoveCommand(c.hub))
 	c.AddGlobalSlashCommand(NewResetCommand(c.hub))
 	c.AddGlobalSlashCommand(NewLeaveCommand(c.hub))
+	c.AddGlobalSlashCommand(NewAutoPlayCommand(c.hub))
 
 	log.Println("Pammy is now running.")
 
