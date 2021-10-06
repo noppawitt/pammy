@@ -92,7 +92,7 @@ func (c *AddCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate
 
 	bot.Add(track)
 
-	updateResponse(s, i.Interaction, fmt.Sprintf("<@%s> added `%s`", i.Member.User.ID, track.Name))
+	updateResponse(s, i.Interaction, fmt.Sprintf("Added `%s`", track.Name))
 }
 
 func userVoiceState(s *discordgo.State, guildID, userID string) *discordgo.VoiceState {
@@ -154,9 +154,9 @@ func (c *NextCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	if bot.CurrentTrackIndex() > bot.TotalTracks() {
-		respondText(s, i.Interaction, fmt.Sprintf("<@%s> skip to end of queue", i.Member.User.ID))
+		respondText(s, i.Interaction, "Skipped to end of the queue")
 	} else {
-		respondText(s, i.Interaction, fmt.Sprintf("<@%s> skip to track #%d", i.Member.User.ID, bot.CurrentTrackIndex()+1))
+		respondText(s, i.Interaction, fmt.Sprintf("Skipped to track #%d", bot.CurrentTrackIndex()+1))
 	}
 }
 
@@ -173,7 +173,7 @@ func NewPauseCommand(hub *Hub) *PauseCommand {
 func (c *PauseCommand) Command() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{
 		Name:        "pause",
-		Description: "Pause the current track",
+		Description: "Pause the current playing track",
 	}
 }
 
@@ -195,7 +195,7 @@ func (c *PauseCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCrea
 		return
 	}
 
-	respondText(s, i.Interaction, fmt.Sprintf("<@%s> pause the music", i.Member.User.ID))
+	respondText(s, i.Interaction, "Player paused")
 }
 
 type ResumeCommand struct {
@@ -211,7 +211,7 @@ func NewResumeCommand(hub *Hub) *ResumeCommand {
 func (c *ResumeCommand) Command() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{
 		Name:        "resume",
-		Description: "Resume the current track",
+		Description: "Resume the current playing track",
 	}
 }
 
@@ -233,7 +233,7 @@ func (c *ResumeCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return
 	}
 
-	respondText(s, i.Interaction, fmt.Sprintf("<@%s> resume the music", i.Member.User.ID))
+	respondText(s, i.Interaction, "Resuming player")
 }
 
 type RemoveCommand struct {
@@ -281,7 +281,7 @@ func (c *RemoveCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 		return
 	}
 
-	respondText(s, i.Interaction, fmt.Sprintf("<@%s> remove track #%d", i.Member.User.ID, trackNo))
+	respondText(s, i.Interaction, fmt.Sprintf("Removed track #%d", trackNo))
 }
 
 type ResetCommand struct {
@@ -310,7 +310,7 @@ func (c *ResetCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCrea
 
 	bot.Reset()
 
-	respondText(s, i.Interaction, fmt.Sprintf("<@%s> reset the player", i.Member.User.ID))
+	respondText(s, i.Interaction, "Player is reset")
 }
 
 type ListCommand struct {
@@ -382,7 +382,7 @@ func (c *LeaveCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCrea
 	bot.Close()
 	c.hub.RemoveBot(i.GuildID)
 
-	respondText(s, i.Interaction, fmt.Sprintf("<@%s> remove the player", i.Member.User.ID))
+	respondText(s, i.Interaction, "Seeya!")
 }
 
 func respondAddMusicFirst(s *discordgo.Session, i *discordgo.Interaction) error {
