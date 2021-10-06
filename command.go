@@ -50,10 +50,12 @@ func (c *AddCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate
 		c.hub.SetBot(bot, i.GuildID)
 	}
 
-	if bot.ChannelID() != "" && bot.ChannelID() != vs.ChannelID {
+	if bot.VoiceChannelID() != "" && bot.VoiceChannelID() != vs.ChannelID {
 		updateResponse(s, i.Interaction, "Pammy is singing in other voice channel")
 		return
 	}
+
+	bot.SetTextChannelID(i.ChannelID)
 
 	query := i.ApplicationCommandData().Options[0].StringValue()
 
@@ -86,7 +88,7 @@ func (c *AddCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate
 		}
 	}
 
-	if bot.ChannelID() == "" {
+	if bot.VoiceChannelID() == "" {
 		err := bot.JoinVoiceChannel(vs.ChannelID)
 		if err != nil {
 			updateResponse(s, i.Interaction, "Cannot join voice channel")

@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"log"
+	"math/rand"
+	"time"
 
 	"github.com/noppawitt/pammy"
 )
@@ -12,6 +14,8 @@ func main() {
 
 	flag.StringVar(&token, "t", "", "Bot Token")
 	flag.Parse()
+
+	rand.Seed(time.Now().UnixNano())
 
 	bot, err := pammy.NewClient(token)
 	if err != nil {

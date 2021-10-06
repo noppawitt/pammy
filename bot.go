@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -38,8 +39,9 @@ const (
 type Bot struct {
 	mu sync.RWMutex
 
-	guidID    string
-	channelID string
+	guidID         string
+	voiceChannelID string
+	textChannelID  string
 
 	tracks                []*Track
 	currentTrackIdx       int
@@ -80,7 +82,7 @@ func (b *Bot) JoinVoiceChannel(channelID string) error {
 		return err
 	}
 
-	b.channelID = channelID
+	b.voiceChannelID = channelID
 	b.vc = vc
 
 	return nil
@@ -112,10 +114,14 @@ func (b *Bot) play() {
 		b.sendError(ErrNotInVoiceChannel)
 	}
 
+	b.mu.Lock()
 	b.state = BotStatePlaying
+	b.mu.Unlock()
 	b.vc.Speaking(true)
 	defer func() {
+		b.mu.Lock()
 		b.state = BotStateWaitForTrack
+		b.mu.Unlock()
 		b.vc.Speaking(false)
 	}()
 
@@ -132,6 +138,11 @@ func (b *Bot) play() {
 		if err != nil {
 			b.sendError(err)
 			return
+		}
+
+		_, err = b.dg.ChannelMessageSend(b.textChannelID, fmt.Sprintf("Playing `%s`", video.Title))
+		if err != nil {
+			log.Println(err)
 		}
 
 		dca.Logger = log.New(ioutil.Discard, "", 0)
@@ -315,8 +326,18 @@ func (b *Bot) Reset() {
 	b.autoDiscoverNextTrack = false
 }
 
-func (b *Bot) ChannelID() string {
-	return b.channelID
+func (b *Bot) VoiceChannelID() string {
+	return b.voiceChannelID
+}
+
+func (b *Bot) TextChannelID() string {
+	return b.textChannelID
+}
+
+func (b *Bot) SetTextChannelID(id string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.textChannelID = id
 }
 
 func (b *Bot) State() BotState {
@@ -393,7 +414,12 @@ func (b *Bot) List(page, pageSize int) TrackPage {
 		PageSize:    pageSize,
 		TotalPage:   (len(b.tracks) / pageSize) + 1,
 		TotalTracks: len(b.tracks),
-		TotalQueued: len(b.tracks[b.currentTrackIdx+1:]),
+	}
+
+	if b.state == BotStateWaitForTrack {
+		trackPage.TotalQueued = 0
+	} else {
+		trackPage.TotalQueued = len(b.tracks[b.currentTrackIdx+1:])
 	}
 
 	return trackPage
@@ -427,15 +453,16 @@ func (b *Bot) discoverNextTrack() error {
 		return errors.New("no tracks discovered")
 	}
 
-	b.mu.Unlock()
-
-	video := videos[0]
+	// TODO: improve suggested track selection
+	video := videos[rand.Intn(len(videos))]
 
 	track := &Track{
 		ID:       video.ID,
 		Name:     video.Title,
 		Duration: video.Duration,
 	}
+
+	b.mu.Unlock()
 
 	b.Add(track)
 
