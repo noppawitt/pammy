@@ -343,6 +343,7 @@ type TrackPage struct {
 	PageSize    int
 	TotalPage   int
 	TotalTracks int
+	TotalQueued int
 }
 
 func (tp TrackPage) DisplayText() string {
@@ -350,7 +351,7 @@ func (tp TrackPage) DisplayText() string {
 		return "No tracks"
 	}
 
-	s := fmt.Sprintf("Queue (%d tracks)\n```", tp.TotalTracks)
+	s := fmt.Sprintf("Total %d tracks (%d queued)\n```", tp.TotalTracks, tp.TotalQueued)
 
 	for _, info := range tp.TrackInfos {
 		s += info + "\n"
@@ -392,6 +393,7 @@ func (b *Bot) List(page, pageSize int) TrackPage {
 		PageSize:    pageSize,
 		TotalPage:   (len(b.tracks) / pageSize) + 1,
 		TotalTracks: len(b.tracks),
+		TotalQueued: len(b.tracks[b.currentTrackIdx+1:]),
 	}
 
 	return trackPage
