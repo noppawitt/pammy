@@ -160,11 +160,11 @@ func (b *Bot) play() {
 		select {
 		case err = <-done:
 			b.stop()
-			b.mu.Lock()
 			if err != nil && err != io.EOF {
 				b.sendError(err)
 				return
 			}
+			b.mu.Lock()
 			b.currentTrackIdx++
 			b.mu.Unlock()
 		case <-b.skipCh:
@@ -188,7 +188,7 @@ func (b *Bot) stop() {
 	defer b.mu.Unlock()
 
 	b.streamSess.SetPaused(true)
-	b.encodeSess.Cleanup()
+	b.encodeSess.Stop()
 }
 
 func (b *Bot) Pause() error {
