@@ -20,6 +20,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer f.Close()
 
 	infos, err := youtube.ExtractSearchResult(f)
 	if err != nil {
