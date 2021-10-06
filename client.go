@@ -53,6 +53,7 @@ func (c *Client) Start() error {
 	c.AddGlobalSlashCommand(NewResumeCommand(c.hub))
 	c.AddGlobalSlashCommand(NewListCommand(c.hub))
 	c.AddGlobalSlashCommand(NewRemoveCommand(c.hub))
+	c.AddGlobalSlashCommand(NewClearCommand(c.hub))
 	c.AddGlobalSlashCommand(NewResetCommand(c.hub))
 	c.AddGlobalSlashCommand(NewLeaveCommand(c.hub))
 	c.AddGlobalSlashCommand(NewAutoPlayCommand(c.hub))

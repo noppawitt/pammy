@@ -158,7 +158,11 @@ func (c *NextCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	if bot.CurrentTrackIndex() >= bot.TotalTracks() {
-		respondText(s, i.Interaction, "End of queue")
+		if bot.AutoDiscoverNextTrack() {
+			respondText(s, i.Interaction, "Discovering next music...")
+		} else {
+			respondText(s, i.Interaction, "End of queue")
+		}
 	} else {
 		respondText(s, i.Interaction, fmt.Sprintf("Skipped to track #%d", bot.CurrentTrackIndex()+1))
 	}
@@ -286,6 +290,48 @@ func (c *RemoveCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 
 	respondText(s, i.Interaction, fmt.Sprintf("Removed track #%d", trackNo))
+}
+
+type ClearCommand struct {
+	hub *Hub
+}
+
+func NewClearCommand(hub *Hub) *ClearCommand {
+	return &ClearCommand{
+		hub: hub,
+	}
+}
+
+func (c *ClearCommand) Command() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "clear",
+		Description: "Clear music queue",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionBoolean,
+				Name:        "all",
+				Description: "Remove both previous and upcomming music",
+				Required:    false,
+			},
+		},
+	}
+}
+
+func (c *ClearCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	bot, ok := c.hub.GetBot(i.GuildID)
+	if !ok {
+		respondTextPrivate(s, i.Interaction, "Pammy didn't join any channels")
+		return
+	}
+
+	all := false
+	if len(i.ApplicationCommandData().Options) > 0 {
+		all = i.ApplicationCommandData().Options[0].BoolValue()
+	}
+
+	n := bot.Clear(all)
+
+	respondText(s, i.Interaction, fmt.Sprintf("Removed %d track(s)", n))
 }
 
 type ResetCommand struct {

@@ -264,6 +264,43 @@ func (b *Bot) Add(track *Track) {
 	}
 }
 
+// Clear clears the upcomming tracks (tracks queue) then return a total removed tracks
+// Set all to true to clear all tracks except the current playing track.
+func (b *Bot) Clear(all bool) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if len(b.tracks) == 0 {
+		return 0
+	}
+
+	var total int
+
+	if all {
+		if b.state == BotStateWaitForTrack {
+			// remove all tracks
+			total = len(b.tracks)
+			b.tracks = nil
+		} else {
+			// remove all tracks except the current playing track
+			total = len(b.tracks) - 1
+			b.tracks = b.tracks[b.currentTrackIdx : b.currentTrackIdx+1]
+		}
+	} else {
+		if b.state == BotStateWaitForTrack {
+			// no queue
+			return 0
+		}
+		// remove upcomming tracks
+		total = len(b.tracks[b.currentTrackIdx+1:])
+		b.tracks = b.tracks[b.currentTrackIdx:]
+	}
+
+	b.currentTrackIdx = 0
+
+	return total
+}
+
 func (b *Bot) Reset() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -275,6 +312,7 @@ func (b *Bot) Reset() {
 	b.currentTrackIdx = 0
 	b.state = BotStateWaitForTrack
 	b.tracks = nil
+	b.autoDiscoverNextTrack = false
 }
 
 func (b *Bot) ChannelID() string {
@@ -357,6 +395,10 @@ func (b *Bot) List(page, pageSize int) TrackPage {
 	}
 
 	return trackPage
+}
+
+func (b *Bot) AutoDiscoverNextTrack() bool {
+	return b.autoDiscoverNextTrack
 }
 
 func (b *Bot) SetAutoDiscoverNextTrack(v bool) {
