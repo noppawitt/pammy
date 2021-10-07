@@ -17,12 +17,12 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	bot, err := pammy.NewClient(token)
+	pammy, err := pammy.NewClient(token)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := bot.Start(); err != nil {
+	if err := pammy.Start(); err != nil {
 		log.Fatal(err)
 	}
 }
