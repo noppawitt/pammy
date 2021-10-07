@@ -36,7 +36,7 @@ func (c *AddCommand) Command() *discordgo.ApplicationCommand {
 }
 
 func (c *AddCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	respondText(s, i.Interaction, "Pammy is thinking...")
+	respondText(s, i.Interaction, "Pammy is working...")
 
 	vs := userVoiceState(s.State, i.GuildID, i.Member.User.ID)
 	if vs == nil {
@@ -160,11 +160,7 @@ func (c *NextCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	if bot.CurrentTrackIndex() >= bot.TotalTracks() {
-		if bot.AutoDiscoverNextTrack() {
-			respondText(s, i.Interaction, "Discovering next music...")
-		} else {
-			respondText(s, i.Interaction, "End of queue")
-		}
+		respondText(s, i.Interaction, "End of queue")
 	} else {
 		respondText(s, i.Interaction, fmt.Sprintf("Skipped to track #%d", bot.CurrentTrackIndex()+1))
 	}

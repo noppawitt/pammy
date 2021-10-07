@@ -113,6 +113,7 @@ func (b *Bot) Close() {
 func (b *Bot) play() {
 	if b.vc == nil {
 		b.sendError(ErrNotInVoiceChannel)
+		return
 	}
 
 	b.mu.Lock()
@@ -127,8 +128,6 @@ func (b *Bot) play() {
 	}()
 
 	for b.currentTrackIdx < len(b.tracks) {
-		b.mu.Lock()
-
 		video, err := b.ytClient.GetVideo(b.tracks[b.currentTrackIdx].ID)
 		if err != nil {
 			b.sendError(err)
@@ -144,6 +143,7 @@ func (b *Bot) play() {
 		_, err = b.dg.ChannelMessageSend(b.textChannelID, fmt.Sprintf("Playing `%s`", video.Title))
 		if err != nil {
 			log.Println(err)
+			return
 		}
 
 		dca.Logger = log.New(ioutil.Discard, "", 0)
@@ -155,8 +155,6 @@ func (b *Bot) play() {
 
 		done := make(chan error)
 		b.streamSess = dca.NewStream(b.encodeSess, b.vc, done)
-
-		b.mu.Unlock()
 
 		select {
 		case err = <-done:
@@ -185,9 +183,6 @@ func (b *Bot) play() {
 }
 
 func (b *Bot) stop() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
 	b.streamSess.SetPaused(true)
 	b.encodeSess.Stop()
 }
@@ -256,13 +251,24 @@ func (b *Bot) GoTo(idx int) error {
 		idx = 0
 	}
 
-	if idx >= len(b.tracks) {
+	if idx > len(b.tracks) {
 		idx = len(b.tracks)
 	}
 
 	b.currentTrackIdx = idx
+
+	if b.state == BotStateWaitForTrack {
+		if idx == len(b.tracks) {
+			if b.autoDiscoverNextTrack {
+				return b.discoverNextTrack()
+			}
+			return nil
+		} else {
+			go b.play()
+		}
+	}
+
 	b.skipCh <- struct{}{}
-	b.state = BotStatePlaying
 
 	return nil
 }
@@ -439,7 +445,7 @@ func (b *Bot) SetAutoDiscoverNextTrack(v bool) {
 }
 
 func (b *Bot) discoverNextTrack() error {
-	b.mu.Lock()
+	b.dg.ChannelMessageSend(b.textChannelID, "Discovering next music...")
 
 	lastTrackIdx := len(b.tracks) - 1
 	if lastTrackIdx < 0 {
@@ -464,9 +470,7 @@ func (b *Bot) discoverNextTrack() error {
 		Duration: video.Duration,
 	}
 
-	b.mu.Unlock()
-
-	b.Add(track)
+	go b.Add(track)
 
 	return nil
 }
