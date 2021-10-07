@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"math/rand"
 	"sync"
 	"time"
@@ -454,7 +455,7 @@ func (b *Bot) discoverNextTrack() error {
 	}
 
 	// TODO: improve suggested track selection
-	video := videos[rand.Intn(len(videos))]
+	video := videos[expRandInt(len(videos))]
 
 	track := &Track{
 		ID:       video.ID,
@@ -467,4 +468,11 @@ func (b *Bot) discoverNextTrack() error {
 	b.Add(track)
 
 	return nil
+}
+
+func expRandInt(n int) int {
+	x := -rand.Float64()
+	// y is in range (0,1]
+	y := math.Pow(math.E, 4*x)
+	return int(math.Floor(y * float64(n)))
 }
