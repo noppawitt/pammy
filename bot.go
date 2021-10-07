@@ -262,6 +262,7 @@ func (b *Bot) GoTo(idx int) error {
 
 	b.currentTrackIdx = idx
 	b.skipCh <- struct{}{}
+	b.state = BotStatePlaying
 
 	return nil
 }
