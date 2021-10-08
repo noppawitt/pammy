@@ -141,12 +141,14 @@ func (b *Bot) play() {
 		}
 
 		_, sendErr := b.dg.ChannelMessageSend(b.textChannelID, fmt.Sprintf("Playing `%s`", video.Title))
-		if err != nil {
+		if sendErr != nil {
 			log.Println(sendErr)
 		}
 
 		var skipped chan struct{}
-		if err == nil {
+		if err != nil {
+			b.dg.ChannelMessageSend(b.textChannelID, fmt.Sprintf("Cannot play `%s`, skipping...", video.Title))
+		} else {
 			dca.Logger = log.New(ioutil.Discard, "", 0)
 			b.encodeSess, err = dca.EncodeFile(streamURL, dca.StdEncodeOptions)
 			if err != nil {
