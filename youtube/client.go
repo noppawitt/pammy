@@ -2,6 +2,7 @@ package youtube
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -80,6 +81,52 @@ func (c *Client) GetSuggestedVideos(id string) ([]VideoInfo, error) {
 	}
 
 	return infos, nil
+}
+
+func (c *Client) GetAudioStreamURL(video *youtube.Video) (string, error) {
+	format := c.filterAudioChannel(video.Formats)
+	if format == nil {
+		return "", errors.New("no audio format")
+	}
+
+	var (
+		streamURL string
+		err       error
+		lastErr   error
+	)
+
+	for i := 0; i < 3; i++ {
+		streamURL, err = c.GetStreamURL(video, format)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		resp, err := c.httpClient.Head(streamURL)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("invalid response code: %d", resp.StatusCode)
+		}
+	}
+
+	return streamURL, lastErr
+}
+
+var opusItags = [...]int{249, 250, 251}
+
+func (c *Client) filterAudioChannel(formats youtube.FormatList) *youtube.Format {
+	for _, itag := range opusItags {
+		format := formats.FindByItag(itag)
+		if format != nil {
+			return format
+		}
+	}
+
+	return nil
 }
 
 func extractJSONData(r io.Reader) ([]byte, error) {

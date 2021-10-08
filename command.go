@@ -159,10 +159,12 @@ func (c *NextCommand) Handle(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	if bot.CurrentTrackIndex() >= bot.TotalTracks() {
+	currentTrackIdx := bot.CurrentTrackIndex()
+
+	if currentTrackIdx >= bot.TotalTracks() {
 		respondText(s, i.Interaction, "End of queue")
 	} else {
-		respondText(s, i.Interaction, fmt.Sprintf("Skipped to track #%d", bot.CurrentTrackIndex()+1))
+		respondText(s, i.Interaction, fmt.Sprintf("Skipped to track #%d", currentTrackIdx+1))
 	}
 }
 

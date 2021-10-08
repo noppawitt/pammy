@@ -50,7 +50,7 @@ type Bot struct {
 	autoDiscoverNextTrack bool
 
 	errCh  chan error
-	skipCh chan struct{}
+	skipCh chan chan struct{}
 	stopCh chan struct{}
 
 	ytClient   *youtube.Client
@@ -67,7 +67,7 @@ func NewBot(guidID string, dg *discordgo.Session, ytClient *youtube.Client, errC
 		currentTrackIdx: 0,
 		state:           BotStateWaitForTrack,
 		errCh:           errCh,
-		skipCh:          make(chan struct{}),
+		skipCh:          make(chan chan struct{}),
 		stopCh:          make(chan struct{}),
 		ytClient:        ytClient,
 		dg:              dg,
@@ -128,56 +128,63 @@ func (b *Bot) play() {
 	}()
 
 	for b.currentTrackIdx < len(b.tracks) {
+		var err error
+
 		video, err := b.ytClient.GetVideo(b.tracks[b.currentTrackIdx].ID)
 		if err != nil {
 			b.sendError(err)
-			return
 		}
 
-		streamURL, err := b.ytClient.GetStreamURL(video, video.Formats.FindByItag(249))
+		streamURL, err := b.ytClient.GetAudioStreamURL(video)
 		if err != nil {
 			b.sendError(err)
-			return
 		}
 
-		_, err = b.dg.ChannelMessageSend(b.textChannelID, fmt.Sprintf("Playing `%s`", video.Title))
+		_, sendErr := b.dg.ChannelMessageSend(b.textChannelID, fmt.Sprintf("Playing `%s`", video.Title))
 		if err != nil {
-			log.Println(err)
-			return
+			log.Println(sendErr)
 		}
 
-		dca.Logger = log.New(ioutil.Discard, "", 0)
-		b.encodeSess, err = dca.EncodeFile(streamURL, dca.StdEncodeOptions)
-		if err != nil {
-			b.sendError(err)
-			return
-		}
-
-		done := make(chan error)
-		b.streamSess = dca.NewStream(b.encodeSess, b.vc, done)
-
-		select {
-		case err = <-done:
-			b.stop()
-			if err != nil && err != io.EOF {
+		var skipped chan struct{}
+		if err == nil {
+			dca.Logger = log.New(ioutil.Discard, "", 0)
+			b.encodeSess, err = dca.EncodeFile(streamURL, dca.StdEncodeOptions)
+			if err != nil {
 				b.sendError(err)
 				return
 			}
-			b.mu.Lock()
-			b.currentTrackIdx++
-			b.mu.Unlock()
-		case <-b.skipCh:
-			b.stop()
-		case <-b.stopCh:
-			b.stop()
-			return
+
+			done := make(chan error)
+			b.streamSess = dca.NewStream(b.encodeSess, b.vc, done)
+
+			select {
+			case err := <-done:
+				b.stop()
+				if err != nil && err != io.EOF {
+					b.sendError(err)
+					return
+				}
+			case skipped = <-b.skipCh:
+				b.stop()
+			case <-b.stopCh:
+				b.stop()
+				return
+			}
 		}
 
-		if b.currentTrackIdx == len(b.tracks) && b.autoDiscoverNextTrack {
+		if b.currentTrackIdx == len(b.tracks)-1 && b.autoDiscoverNextTrack {
 			err = b.discoverNextTrack()
 			if err != nil {
 				log.Println("cannot discover next track: ", err)
 			}
+		}
+
+		b.mu.Lock()
+		b.currentTrackIdx++
+		b.mu.Unlock()
+
+		if skipped != nil {
+			skipped <- struct{}{}
 		}
 	}
 }
@@ -241,7 +248,6 @@ func (b *Bot) Prev(n int) error {
 
 func (b *Bot) GoTo(idx int) error {
 	b.mu.Lock()
-	defer b.mu.Unlock()
 
 	if len(b.tracks) == 0 {
 		return ErrEmptyTracks
@@ -268,7 +274,16 @@ func (b *Bot) GoTo(idx int) error {
 		}
 	}
 
-	b.skipCh <- struct{}{}
+	// Skipping in playing state is done by:
+	// 1. Set the current track index to the one before the wanted track.
+	// 2. Send skip signal to termninate the current playing track then wait the playloop to iterate to the next track.
+	b.currentTrackIdx--
+	done := make(chan struct{})
+	b.skipCh <- done
+
+	b.mu.Unlock()
+
+	<-done
 
 	return nil
 }
@@ -335,10 +350,14 @@ func (b *Bot) Reset() {
 }
 
 func (b *Bot) VoiceChannelID() string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	return b.voiceChannelID
 }
 
 func (b *Bot) TextChannelID() string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	return b.textChannelID
 }
 
@@ -349,14 +368,20 @@ func (b *Bot) SetTextChannelID(id string) {
 }
 
 func (b *Bot) State() BotState {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	return b.state
 }
 
 func (b *Bot) CurrentTrackIndex() int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	return b.currentTrackIdx
 }
 
 func (b *Bot) TotalTracks() int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	return len(b.tracks)
 }
 
@@ -392,6 +417,9 @@ func (tp TrackPage) DisplayText() string {
 }
 
 func (b *Bot) List(page, pageSize int) TrackPage {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
 	if pageSize == 0 {
 		pageSize = 10
 	}
@@ -434,6 +462,8 @@ func (b *Bot) List(page, pageSize int) TrackPage {
 }
 
 func (b *Bot) AutoDiscoverNextTrack() bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	return b.autoDiscoverNextTrack
 }
 
