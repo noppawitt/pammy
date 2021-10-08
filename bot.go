@@ -284,6 +284,7 @@ func (b *Bot) GoTo(idx int) error {
 	b.mu.Unlock()
 
 	<-done
+	close(done)
 
 	return nil
 }
