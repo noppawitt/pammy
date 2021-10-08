@@ -108,10 +108,11 @@ func (c *Client) GetAudioStreamURL(video *youtube.Video) (string, error) {
 			continue
 		}
 
-		if resp.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("invalid response code: %d", resp.StatusCode)
+		if resp.StatusCode == http.StatusOK {
+			return streamURL, nil
 		}
 
+		lastErr = fmt.Errorf("invalid response code: %d", resp.StatusCode)
 		time.Sleep(200 * time.Millisecond)
 	}
 
