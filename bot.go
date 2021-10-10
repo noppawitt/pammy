@@ -270,10 +270,10 @@ func (b *Bot) GoTo(idx int) error {
 			if b.autoDiscoverNextTrack {
 				return b.discoverNextTrack()
 			}
-			return nil
 		} else {
 			go b.play()
 		}
+		return nil
 	}
 
 	// Skipping in playing state is done by:
